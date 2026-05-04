@@ -191,13 +191,17 @@ pub const Value = union(enum) {
     }
 
     pub fn fromIntegerLiteral(bytes: []const u8) Value {
-        _ = bytes;
-        return .{ .int = .{ .value = 0 } };
+        const num = std.fmt.parseInt(i64, bytes, 10) catch {
+            return .{ .err = "error parsing int" };
+        };
+        return .{ .int = .{ .value = num } };
     }
 
     pub fn fromFloatLiteral(bytes: []const u8) Value {
-        _ = bytes;
-        return .{ .float = .{ .value = 0 } };
+        const num = std.fmt.parseFloat(f64, bytes) catch {
+            return .{ .err = "error parsing float" };
+        };
+        return .{ .float = .{ .value = num } };
     }
 
     pub fn fromBooleanLiteral(b: bool) Value {
