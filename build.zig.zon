@@ -20,6 +20,11 @@
             .url = "git+https://github.com/kristoff-it/scripty#ad75ad546bc7dd2ece4acd23404e25cd65a4bde9",
             .hash = "scripty-0.1.0-LKK5O-sUAQDifuGq_k00NAdEgJjNxXoFTt9js_A7Yx4F",
         },
+        .afl_kit = .{
+            .url = "git+https://github.com/kristoff-it/zig-afl-kit#e9b5dfc14c06133786a09214709316dc9fb54bd9",
+            .hash = "afl_kit-0.1.0-NdJ3ctQfAACNK1UANoF4pwkWOdW-JGLXHby9OE9-xMPq",
+            .lazy = true,
+        },
     },
     .paths = .{
         "LICENSE",

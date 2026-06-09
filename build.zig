@@ -69,10 +69,11 @@ pub fn build(b: *std.Build) !void {
     const lsp = b.dependency("lsp_kit", .{});
 
     const check = setupCheckStep(b, target, optimize, options, superhtml, folders, lsp);
-    setupTestStep(b, superhtml, check);
+    const test_step = setupTestStep(b, superhtml, check);
     setupCliTool(b, target, optimize, options, superhtml, folders, lsp);
     setupWasmStep(b, optimize, options, superhtml, lsp);
     setupFetchLanguageSubtagRegistryStep(b, target);
+    setupFuzzStep(b, target, test_step, superhtml);
 
     const release = b.step("release", "Create release builds of SuperHTML");
     const git_version = getGitVersion(b);
@@ -97,6 +98,58 @@ pub fn build(b: *std.Build) !void {
             "error: git tag missing, cannot make release builds",
         ).step);
     }
+}
+
+fn setupFuzzStep(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    test_step: *std.Build.Step,
+    superhtml: *std.Build.Module,
+) void {
+    if (!(b.option(bool, "fuzz", "enable fuzzing") orelse false)) {
+        return;
+    }
+
+    const afl = b.lazyImport(@This(), "afl_kit") orelse return;
+
+    // Define an object file that contains your test function:
+    const afl_obj = b.addObject(.{
+        .name = "fuzz",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/fuzz/afl.zig"),
+            .target = target,
+            .optimize = .ReleaseSafe,
+            .single_threaded = true,
+        }),
+    });
+
+    afl_obj.root_module.addImport("superhtml", superhtml);
+
+    // Required options:
+    afl_obj.root_module.stack_check = false; // not linking with compiler-rt
+    afl_obj.root_module.link_libc = true; // afl runtime depends on libc
+    afl_obj.root_module.fuzz = true;
+    afl_obj.sanitize_coverage_trace_pc_guard = true;
+
+    // Generate an instrumented executable:
+    const afl_fuzz = afl.addInstrumentedExe(b, target, .ReleaseSafe, null, true, afl_obj, &.{});
+
+    // Install it
+    test_step.dependOn(&b.addInstallBinFile(afl_fuzz orelse return, "fuzz").step);
+
+    const repro = b.addExecutable(.{
+        .name = "fuzz-repro",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/fuzz/afl-repro.zig"),
+            .target = target,
+            .optimize = .Debug,
+            .single_threaded = true,
+        }),
+    });
+
+    repro.root_module.addImport("superhtml", superhtml);
+
+    test_step.dependOn(&b.addInstallArtifact(repro, .{}).step);
 }
 
 fn setupCheckStep(
@@ -133,7 +186,7 @@ fn setupTestStep(
     b: *std.Build,
     superhtml: *std.Build.Module,
     check: *std.Build.Step,
-) void {
+) *std.Build.Step {
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(check);
 
@@ -144,6 +197,7 @@ fn setupTestStep(
     const run_unit_tests = b.addRunArtifact(unit_tests);
 
     test_step.dependOn(&run_unit_tests.step);
+    return test_step;
 }
 
 fn setupCliTool(
