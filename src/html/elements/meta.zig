@@ -167,7 +167,7 @@ pub const attributes: AttributeSet = .init(&.{
         .name = "charset",
         .model = .{
             .rule = .{ .custom = validateCharset },
-            .desc = "This attribute declares the document's character encoding. If the attribute is present, its value must be an ASCII case-insensitive match for the string 'utf-8', because UTF-8 is the only valid encoding for HTML5 documents. Since this attribute only accepts one value, its usage is not recommended.",
+            .desc = "This attribute declares the document's character encoding. If the attribute is present, its value must be an ASCII case-insensitive match for the string 'utf-8', because UTF-8 is the only valid encoding for HTML5 documents. Not specifying a meta charset will cause browsers to assume windows-1252.",
         },
     },
 });
