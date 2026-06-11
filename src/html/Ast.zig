@@ -1000,6 +1000,7 @@ pub fn render(ast: Ast, src: []const u8, w: *Writer) !void {
     var indentation: u32 = 0;
     var current = ast.nodes[1];
     var direction: enum { enter, exit } = .enter;
+    var first_child = true;
     var last_rbracket: u32 = 0;
     var last_was_text = false;
     var pre: u32 = 0;
@@ -1030,8 +1031,13 @@ pub fn render(ast: Ast, src: []const u8, w: *Writer) !void {
                 } else {
                     const vertical = if (last_was_text and current.kind != .text)
                         std.mem.indexOfScalar(u8, maybe_ws, '\n') != null
-                    else
-                        maybe_ws.len > 0;
+                    else switch (current.kind) {
+                        .text => if (first_child)
+                            maybe_ws.len > 0
+                        else
+                            std.mem.indexOfScalar(u8, maybe_ws, '\n') != null,
+                        else => maybe_ws.len > 0,
+                    };
 
                     if (vertical) {
                         fmtlog.debug("adding a newline", .{});
@@ -1311,7 +1317,9 @@ pub fn render(ast: Ast, src: []const u8, w: *Writer) !void {
                         }
                     },
                 }
+
                 last_rbracket = current.open.end;
+                first_child = false;
 
                 if (current.next_idx != 0) {
                     fmtlog.debug("text next: {}", .{current.next_idx});
@@ -1334,6 +1342,7 @@ pub fn render(ast: Ast, src: []const u8, w: *Writer) !void {
                 ));
 
                 last_rbracket = current.open.end;
+                first_child = false;
 
                 if (current.next_idx != 0) {
                     current = ast.nodes[current.next_idx];
@@ -1376,6 +1385,7 @@ pub fn render(ast: Ast, src: []const u8, w: *Writer) !void {
                     try w.print(">", .{});
                 }
 
+                first_child = false;
                 if (current.next_idx != 0) {
                     current = ast.nodes[current.next_idx];
                 } else {
@@ -1476,6 +1486,7 @@ pub fn render(ast: Ast, src: []const u8, w: *Writer) !void {
                     assert(current.kind.isElement());
 
                     if (current.self_closing or current.kind.isVoid()) {
+                        first_child = false;
                         if (current.next_idx != 0) {
                             current = ast.nodes[current.next_idx];
                         } else {
@@ -1484,8 +1495,10 @@ pub fn render(ast: Ast, src: []const u8, w: *Writer) !void {
                         }
                     } else {
                         if (current.first_child_idx == 0) {
+                            first_child = false;
                             direction = .exit;
                         } else {
+                            first_child = true;
                             current = ast.nodes[current.first_child_idx];
                         }
                     }
@@ -1512,6 +1525,8 @@ pub fn render(ast: Ast, src: []const u8, w: *Writer) !void {
                         }
                         try w.print("</{s}>", .{name});
                     }
+
+                    first_child = false;
                     if (current.next_idx != 0) {
                         direction = .enter;
                         current = ast.nodes[current.next_idx];
@@ -2497,6 +2512,24 @@ test "script formatting - single-line while loop" {
         \\{0c}while (condition)
         \\{0c}{0c}doSomething()
         \\</script>
+        \\
+    , .{'\t'});
+    const ast = try Ast.init(std.testing.allocator, case, .html, false);
+    defer ast.deinit(std.testing.allocator);
+
+    try std.testing.expectFmt(expected, "{f}", .{ast.formatter(case)});
+}
+
+test "tag in middle of text" {
+    const case =
+        \\<p>
+        \\    Consider using <code>superhtml fmt --check</code> in your CI!
+        \\</p>
+    ;
+    const expected = comptime std.fmt.comptimePrint(
+        \\<p>
+        \\{0c}Consider using <code>superhtml fmt --check</code> in your CI!
+        \\</p>
         \\
     , .{'\t'});
     const ast = try Ast.init(std.testing.allocator, case, .html, false);
